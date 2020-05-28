@@ -1,4 +1,4 @@
-CDM: The Console Display Manager
+CDM: The Console Display Manager\
 A forked and stripped version of CDM by Paradigm0001
 ================================
 
