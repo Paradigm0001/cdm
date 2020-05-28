@@ -4,8 +4,6 @@
 # Values set here is the default as in cdm(1).
 
 # List of programs, commands with whitespaces should be quoted or escaped.
-# If unset, all sessions in /etc/X11/Sessions or /usr/share/xsessions are
-# offered as choices.
 #
 # (An example:)
 # binlist=(
@@ -46,22 +44,16 @@ xtty=7
 # Should cdm(1) stick to the specified display?
 locktty=no
 
-# Use ConsoleKit for X session?
-consolekit=yes
-
-# Timeout for waiting for X session to register with ConsoleKit.
-cktimeout=30
-
 # Additional arguments to pass to X server, which is usually called as:
 #   /usr/bin/X :$display "${serverargs[@]}" vt$((xtty+display))
 # Arguments with whitespaces should be quoted or escaped.
 serverargs=(-nolisten tcp)
 
-# Alternative method of calling startx(/setsid). Should only be set if cdm
-# does not start X as expected (bash -x shows call to setsid startx, but for
-# no apparent reason does not start X).
-# Only provided in the hope it may be useful, not a guaranteed fix.
-altstartx=no
+# Load the X server resource database
+# Default is no for compatability with the typical behavior of cdm, HOWEVER
+# it is recommended you enable this as most display managers load the X resources.
+# If empty, default is no
+xrdb=no
 
 # Destination for stdout and stderr output from startx.
 startxlog=/dev/null

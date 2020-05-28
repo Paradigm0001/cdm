@@ -1,6 +1,7 @@
-#!/bin/bash
+#!/bin/sh
 #
 #   CDM: The Console Display Manager
+#   A forked and stripped version of CDM by Paradigm0001
 #
 #   Copyright (C) 2009-2012, Daniel J Griffiths <dgriffiths@ghost1227.com>
 #   Thanks to:
@@ -17,96 +18,43 @@
 #   it under the terms of the GNU General Public License as published by
 #   the Free Software Foundation; either version 2 of the License, or
 #   (at your option) any later version.
-#   
+#
 #   This program is distributed in the hope that it will be useful,
 #   but WITHOUT ANY WARRANTY; without even the implied warranty of
 #   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 #   GNU General Public License for more details.
-#   
+#
 #   You should have received a copy of the GNU General Public License
 #   along with this program; if not, write to the Free Software
 #   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #   MA 02110-1301, USA.
+startxlog='/dev/null'
 
-name=$(basename "$0")
-consolekit=false
-cktimeout=30
-altstartx=false
-startxlog=/dev/null
-
-info() { printf ' \033[01;32m*\033[00m '; echo "$name: $*"; }
-error() { (printf ' \033[01;31m*\033[00m '; echo "$name: $*") > /dev/stderr; }
-
-args=$(getopt -n "$name" -o ct: -l consolekit,timeout:,altstartx,startxlog: -- "$@") || exit 1
-eval set -- "$args"
-for arg in "$@"
-do
-    case $arg in
-        '--consolekit' | '-c')
-            consolekit=true; shift
-            ;;
-        '--timeout' | '-t')
-            shift
-            cktimeout=$1; shift
-            ;;
-        '--altstartx')
-            altstartx=true; shift
-            ;;
-        '--startxlog')
-            shift
-            startxlog=$1; shift
-            ;;
-        '--')
-            shift
-            break
-            ;;
-    esac
+for arg; do
+	case $arg in
+		'--xrdb')
+			shift
+			# Call in the X server resource database
+			xrdb="DISPLAY=$1 xrdb -load $HOME/.Xresources"
+			shift
+		;;
+		'--startxlog')
+			shift
+			startxlog="$1"
+			shift
+		;;
+		'--')
+			shift
+			break
+		;;
+	esac
 done
 
-# Do first to avoid race conditions.
-if $consolekit; then
-    info 'waiting for ConsoleKit to register X session.'
-    sleep "$cktimeout" & clockpid=$!
-    dbuspidfifo=$(mktemp --dry-run --tmpdir $name.XXXXXXXX)
-    if ! mkfifo "$dbuspidfifo"; then
-        error "failed to create FIFO \`$fifo'."
-        exit 1
-    fi
-
-    (dbus-monitor --system 'type=signal,interface=org.freedesktop.ConsoleKit.Seat,member=SessionAdded' & echo $! > "$dbuspidfifo") |
-        sed -un 's@[[:space:]]*object path \"\(/[a-zA-Z0-9/]*\)\"@\1@p' | while read object; do
-            if dbus-send --system --print-reply --dest='org.freedesktop.ConsoleKit' "$object" 'org.freedesktop.ConsoleKit.Session.GetX11Display' |
-                grep -qF "$display"
-            then
-                kill "$clockpid"
-                break
-            fi
-        done &
-    dbuspid=$(<"$dbuspidfifo"); rm -f "$dbuspidfifo"
-fi
-
-if $altstartx; then
-    # Alternative method of calling setsid(/startx) for systems that are unresponsive to the 'normal' call.
-    (setsid startx "$@" > "$startxlog" 2>&1 &)
-else
-    setsid startx "$@" > "$startxlog" 2>&1 &
-fi
-
-# If wait(1) returns with a value >128, it was interrupted by kill(1),
-# so registration was sucessful.
-if $consolekit; then
-    if [[ -n "$clockpid" ]]; then
-        if wait "$clockpid" >& /dev/null
-        then
-            kill "$dbuspid"
-            error 'ConsoleKit registration timed out.'
-            exit 1
-        else
-            kill "$dbuspid"
-            info 'ConsoleKit registration succeeded.'
-            exit 0
-        fi
-    fi
-fi
-
-# vim:ts=4:sw=4:et
+# Start the X display
+rm -f "$startxlog" 2>/dev/null
+command -v neofetch >/dev/null 2>&1 && neofetch -L
+[ -n "$xrdb" ] && until pidof Xorg; do
+	eval $xrdb >/dev/null 2>&1
+	sleep 0.66
+done &
+startx $@ > "$startxlog" 2>&1

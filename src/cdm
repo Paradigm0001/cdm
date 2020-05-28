@@ -1,6 +1,7 @@
 #!/bin/bash
 #
 #   CDM: The Console Display Manager
+#   A forked and stripped version of CDM by Paradigm0001
 #
 #   Copyright (C) 2009-2012, Daniel J Griffiths <dgriffiths@ghost1227.com>
 #   Thanks to:
@@ -17,12 +18,12 @@
 #   it under the terms of the GNU General Public License as published by
 #   the Free Software Foundation; either version 2 of the License, or
 #   (at your option) any later version.
-#   
+#
 #   This program is distributed in the hope that it will be useful,
 #   but WITHOUT ANY WARRANTY; without even the implied warranty of
 #   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 #   GNU General Public License for more details.
-#   
+#
 #   You should have received a copy of the GNU General Public License
 #   along with this program; if not, write to the Free Software
 #   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
@@ -47,91 +48,50 @@ yesno()
     eval value=\$${1}
 
     case "$value" in
-        [Yy][Ee][Ss]|[Tt][Rr][Uu][Ee]|[Oo][Nn]|1) return 0;; 
-        [Nn][Oo]|[Ff][Aa][Ll][Ss][Ee]|[Oo][Ff][Ff]|0) return 1;; 
+        [Yy][Ee][Ss]|[Tt][Rr][Uu][Ee]|[Oo][Nn]|1) return 0;;
+        [Nn][Oo]|[Ff][Aa][Ll][Ss][Ee]|[Oo][Ff][Ff]|0) return 1;;
         *) warn "invalid value for \`$1'; falling back to \`no' for now.";;
     esac
 }
 
 # Source cdm configurations.
 
-if [[ -n "$1" ]]; then
-    if [[ -f "$1" ]]
-    then
-        source "$1"
-    else
-        error "config file \`$1' does not exist."
-        exiterror
-    fi
-elif [[ -f "$HOME/.cdmrc" ]]; then
+if [ -n "$1" ]; then
+	if [ -f "$1" ]; then
+		source "$1"
+	else
+		error "config file \`$1' does not exist."
+		exiterror
+	fi
+elif [ -f "$HOME/.cdmrc" ]; then
     source "$HOME/.cdmrc"
-elif [[ -f "${XDG_CONFIG_HOME:-$HOME/.config}/cdm/cdmrc" ]]; then
+elif [ -f "${XDG_CONFIG_HOME:-$HOME/.config}/cdm/cdmrc" ]; then
     source "${XDG_CONFIG_HOME:-$HOME/.config}/cdm/cdmrc"
-elif [[ -f /etc/cdmrc ]]; then
+elif [ -f /etc/cdmrc ]; then
     source /etc/cdmrc
 fi
 
 # Default options.
 
-dialogrc=${dialogrc:-}
-countfrom=${countfrom:-0}
-display=${display:-0}
-xtty=${xtty:-7}
-locktty=${locktty:-no}
-consolekit=${consolekit:-yes}
-cktimeout=${cktimeout:-30}
-altstartx=${altstartx:-no}
+dialogrc="${dialogrc:-}"
+countfrom="${countfrom:-0}"
+display="${display:-0}"
+xtty="${xtty:-7}"
+locktty="${locktty:-no}"
+xrdb="${xrdb:-no}"
 startxlog="${startxlog:-/dev/null}"
-[[ -z "${binlist[*]}" ]] && binlist=()
-[[ -z "${namelist[*]}" ]] && namelist=()
-[[ -z "${flaglist[*]}" ]] && flaglist=()
-[[ -z "${serverargs[*]}" ]] && serverargs=(-nolisten tcp)
 
-# Offer all available sessions in /etc/X11/Sessions,
-# if $binlist if not explicitly set in cdmrc.
+[ -z "${binlist[*]}" ] && {
+	error "No programs found in cdm config file."
+	exiterror
+}
+[ -z "${serverargs[*]}" ] && serverargs=(-nolisten tcp)
 
-if [[ "${#binlist[@]}" == 0 && -d /etc/X11/Sessions ]]; then
-    binlist=($(find /etc/X11/Sessions -maxdepth 1 -type f))
-    flaglist=($(sed 's/[[:digit:]]\+/X/g' <<< ${!binlist[@]}))
-    namelist=(${binlist[@]##*/})
-fi
-
-# If $binlist is not set in cdmrc or by files in /etc/X11/Sessions,
-# try .desktop files in /usr/share/xsessions/ .
-
-if [[ "${#binlist[@]}" == 0 && -d /usr/share/xsessions ]]; then
-    desktopsessions=($(find /usr/share/xsessions/ -regex .\*.desktop))
-    #TODO: allow full quoting and expansion according to desktop entry spec:
-    # http://standards.freedesktop.org/desktop-entry-spec/desktop-entry-spec-latest.html#exec-variables
-
-    for ((count=0; count < ${#desktopsessions[@]}; count++)); do
-        # TryExec key is there to determine if executable is present,
-        # but as we are going to test the Exec key anyway, we ignore it.
-        execkey=$(sed -n -e 's/^Exec=//p' <${desktopsessions[${count}]})
-        namekey=$(sed -n -e 's/^Name=//p' <${desktopsessions[${count}]})
-        if [[ -n ${execkey} && -n ${namekey} ]]; then
-            # The .desktop files allow there Exec keys to use $PATH lookup.
-            binitem="$(which $(cut -f 1 -d ' ' <<< ${execkey}))"
-            # If which fails to return valid path, skip to next .desktop file.
-            if [[ $? != 0 ]]; then continue; fi
-            binlist+=("${binitem} $(cut -s -f 2- -d ' ' <<< ${execkey})")
-            flaglist+=('X')
-            namelist+=("${namekey}")
-        fi
-    done
-fi
-
-case "${#binlist[@]}" in
-    0)
-        error "No programs found in cdm config file, /etc/X11/Sessions or /usr/share/xsessions."
-        exiterror
-        ;;
-    1)
+if [ "${#binlist[@]}" = "1" ]; then
         # No need to call dialog AND clear, only one possible program
-        binindex=0
-        ;;
-    *)
-        menu=()
+	binindex=0
+else
+	menu=()
         for ((count = 0; count < ${#namelist[@]}; count++)); do
             menu=("${menu[@]}" "$((count+countfrom))" "${namelist[${count}]}")
         done
@@ -141,12 +101,12 @@ case "${#binlist[@]}" in
             --cancel-label ' Exit ' --menu 'Select session' 0 0 0 "${menu[@]}"
         )
         if [[ $? != 0 ]]; then
-            clear; exitcancel
+		clear
+		exitcancel
         fi
         clear
         let binindex-=countfrom
-        ;;
-esac
+fi
 
 # Run $bin according to its flag.
 bin=($(eval echo "${binlist[${binindex}]}"))
@@ -190,7 +150,7 @@ case ${flaglist[$binindex]} in
         done
 
         # Support for running X in current tty.
-        if [[ $xtty == 'keep' ]]; then
+        if [ "$xtty" = "keep" ]; then
             vt="$(tty)"
             if [[ "$vt" != '/dev/tty'* ]]; then
                 error 'invalid TTY.'
@@ -203,9 +163,11 @@ case ${flaglist[$binindex]} in
 
         serverargs=(":${display}" "${serverargs[@]}" "vt$vt")
 
-        $(yesno consolekit) && launchflags=(-c -t "$cktimeout")
-        $(yesno altstartx) && launchflags=("${launchflags[@]}" --altstartx)
-        launchflags=("${launchflags[@]}" --startxlog "$startxlog")
+	launchflags=("${launchflags[@]}" --startxlog "$startxlog")
+	# Check if xrdb should be loaded
+	if yesno xrdb; then
+		launchflags=("${launchflags[@]}" --xrdb :$display)
+	fi
         if cdm-xlaunch "${launchflags[@]}" -- "${bin[@]}" -- "${serverargs[@]}"
         then
             exitnormal
@@ -220,5 +182,3 @@ case ${flaglist[$binindex]} in
         exiterror
         ;;
 esac
-
-# vim:ts=4:sw=4:et
